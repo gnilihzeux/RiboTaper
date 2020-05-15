@@ -1,0 +1,179 @@
+#!@GNUBASH@
+
+
+###################################################################
+#    This file is part of RiboTaper.
+#    RiboTaper is a method for defining traslated ORFs using
+#    Ribosome Profiling data.
+#   
+#    Copyright (C) 2015  Lorenzo Calviello
+#
+#    RiboTaper is free software: you can redistribute it and/or modify
+#    it under the terms of the GNU General Public License as published by
+#    the Free Software Foundation, either version 3 of the License, or
+#    (at your option) any later version.
+
+#    RiboTaper is distributed in the hope that it will be useful,
+#    but WITHOUT ANY WARRANTY; without even the implied warranty of
+#    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+#    GNU General Public License for more details.
+#
+#    You should have received a copy of the GNU General Public License
+#    along with RiboTaper.  If not, see <http://www.gnu.org/licenses/>.
+#
+#    Contact: Lorenzo.Calviello@mdc-berlin.de
+#######################################################################
+
+### RiboTaper master File
+
+# This is a placeholder to be replaced at build time
+#:MAKE
+
+
+set -e
+
+if [ $# -ne 6 ]; then
+	echo "Usage: ./Ribotaper.sh <Ribo_bamfile> <RNA_bamfile> <annotation_dir> <comma-sep_read_lenghts_ribo> <comma-sep_cutoffs> <n_cores> "
+	exit 1
+fi
+if ! [[ -f "$1" ]]; then
+     echo "!!!!!   ribo_bam file not found!."
+     exit 1
+   fi
+
+if ! [[ -f "$2" ]]; then
+     echo "!!!!!   ribo_bam not found!."
+     exit 1
+   fi
+
+if [ ! -d "$3" ]; then
+     echo "!!!!!   annotation_directory not found!."
+    exit 1
+fi
+
+re='^[0-9]+$'
+if ! [[ "$6" =~ $re ]] ; then
+   echo "!!!!!   n of cores not valid"
+   exit 1
+fi
+
+
+if [ "$6" == 1 ]; then
+     echo "!!!!!   n of cores required >1."
+    exit 1
+fi
+
+
+
+ribo_bam="`readlink -f $1`"
+rna_bam="`readlink -f $2`"
+annot_dir="`readlink -f $3`"
+read_len=$4
+cutoffs=$5
+n_of_cores=$6
+
+
+echo "Parameters used:"
+echo ""
+
+echo "<Ribo_bamfile> $ribo_bam"
+echo "<RNA_bamfile> $rna_bam"
+echo "<annotation_dir> $annot_dir"
+echo "<comma-sep_read_lenghts_ribo> $read_len"
+echo "<comma-sep_cutoffs> $cutoffs"
+echo "<n_cores> $n_of_cores"
+echo ""
+echo "---------------"
+echo ""
+
+
+
+#take bams for unique and best alignments
+
+echo "Taking unique - best alignments..."
+
+@SAMTOOLS@ view -b -q 50 $ribo_bam > RIBO_unique.bam
+@SAMTOOLS@ view -b -F 0X100 $ribo_bam > RIBO_best.bam
+
+@SAMTOOLS@ view -b -q 50 $rna_bam > RNA_unique.bam
+@SAMTOOLS@ view -b -F 0X100 $rna_bam > RNA_best.bam
+
+
+#calculates P-sites (from argument) and RNA-sites (default 25nt offset)
+
+echo "Calculating P-sites..."
+
+${libexecdir}/P_sites_RNA_sites_calc.bash $read_len $cutoffs
+
+#creates exonic tracks for ccds regions, exons_in ccds genes and non_ccds genes (if a ccds annotation is not available, CCDS = CDS)
+
+echo "Creating tracks..."
+
+${libexecdir}/create_tracks.bash  $annot_dir"/unique_ccds.bed" $annot_dir"/sequences_ccds" ccds
+ 
+${libexecdir}/create_tracks.bash $annot_dir"/unique_exons_ccds.bed" $annot_dir"/sequences_exonsccds" exonsccds
+
+${libexecdir}/create_tracks.bash $annot_dir"/unique_nonccds.bed" $annot_dir"/sequences_nonccds" nonccds
+
+
+#run calculation on CCDS, ExonsCCDS, non-CCDS exons and makes quality checks plots for length-coverage statistics  
+
+echo "Running calculations ccds..."
+
+${libexecdir}/tracks_analysis.R ccds $n_of_cores
+
+echo "Running calculations exons_ccds..."
+
+${libexecdir}/tracks_analysis.R exonsccds $n_of_cores
+
+echo "Running calculations nonccds..."
+
+${libexecdir}/tracks_analysis.R nonccds $n_of_cores
+
+# annotates the exons relative to ccds regions TO BE ADAPTED, CHECK WHICH FILES THEY NEED.
+
+echo "Annotate exons..."
+
+${libexecdir}/annotate_exons.R $annot_dir $n_of_cores
+
+echo "Making quality plots..."
+
+${libexecdir}/quality_check.R $annot_dir
+
+#echo "Calculating coherence..."
+
+#${libexecdir}/calculate_coherence_all_draft.R $n_of_cores
+
+#echo "Calculating alternative exon usage..."
+
+#${libexecdir}/alt_exon_usage_draft.R@ $annot_dir $n_of_cores
+
+#ORF-finding
+
+echo "CCDS ORF finding..."
+
+${libexecdir}/CCDS_orf_finder.R $annot_dir $n_of_cores
+
+echo "NONCCDS ORF finding..."
+
+${libexecdir}/NONCCDS_orf_finder.R $annot_dir $n_of_cores
+
+# Groups ORFs and creates BED files + protein fasta database
+
+echo "Grouping ORFs and creating protein fasta database..."
+
+${libexecdir}/create_protein_db.R
+
+# makes summary plot for the found ORFs
+
+echo "Summarizing ORF finding results"
+
+${libexecdir}/ORF_final_results.R
+
+echo "RiboTaper analysis finished !!!"
+
+
+
+
+
+
