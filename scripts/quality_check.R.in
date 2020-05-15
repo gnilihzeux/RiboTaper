@@ -111,11 +111,11 @@ for(i in 1:dim(length_rpkm)[1]){
                         colnames(res_rna)<-c("non-periodic","periodic")
                 }
                 if(dim(res_rna)[2]==1){
-                        if(names(res)[1]==TRUE){
+                        if(names(res_rna)[1]==TRUE){
                                 res_rna[,2]<-0
                                 colnames(res_rna)<-c("non-periodic","periodic")
                         }
-                        if(names(res)[1]==FALSE){
+                        if(names(res_rna)[1]==FALSE){
                                 res_rna[,2]<-res_rna[,1]
                                 res_rna[,1]<-0
                                 colnames(res_rna)<-c("non-periodic","periodic")
