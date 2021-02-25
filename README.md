@@ -22,3 +22,7 @@ samtools view -b -F 0X100 $ribo_bam > RIBO_best.bam
 ```
 
 It is ok for **STAR** aligner.
+
+### bug fixed
+
+1.``
