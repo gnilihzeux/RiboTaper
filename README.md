@@ -25,4 +25,4 @@ It is ok for **STAR** aligner.
 
 ### bug fixed
 
-1.``
+1.`quality_check.R` line 114 & 118
